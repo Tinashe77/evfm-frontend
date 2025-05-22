@@ -1,4 +1,4 @@
-// src/pages/Runners.jsx - Updated to ensure live data usage
+// src/pages/Runners.jsx - Complete modern design with enhanced CSV export
 import { useState, useEffect } from 'react';
 import axios from '../utils/axios';
 import { 
@@ -7,7 +7,15 @@ import {
   ArrowDownTrayIcon,
   MagnifyingGlassIcon,
   AdjustmentsHorizontalIcon,
-  MapPinIcon
+  MapPinIcon,
+  UsersIcon,
+  UserIcon,
+  ChartBarIcon,
+  EllipsisHorizontalIcon,
+  EyeIcon,
+  PencilIcon,
+  FunnelIcon,
+  CalendarIcon
 } from '@heroicons/react/24/outline';
 import Loading from '../components/Loading';
 import Error from '../components/Error';
@@ -21,7 +29,7 @@ export default function Runners() {
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 10,
+    limit: 12,
     total: 0,
     totalPages: 0
   });
@@ -33,32 +41,26 @@ export default function Runners() {
   const [exportLoading, setExportLoading] = useState(false);
   const [selectedRunner, setSelectedRunner] = useState(null);
   const [locationUpdateCounter, setLocationUpdateCounter] = useState(0);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'table'
 
   useEffect(() => {
-    // Connect to WebSocket on component mount
     connectToAdminDashboard();
-    
-    // Set up real-time listener for runner location updates
     listenToRunnerLocation(handleRunnerLocationUpdate);
     
-    // Clean up listeners on unmount
     return () => {
       removeListeners();
     };
   }, []);
 
   useEffect(() => {
-    // Fetch runners when page or filters change
     fetchRunners();
   }, [pagination.page, filters, locationUpdateCounter]);
 
-  // Handler for real-time runner location updates
   const handleRunnerLocationUpdate = (data) => {
     if (!data || !data.runnerId) return;
     
     console.log('Received location update for runner:', data.runnerId);
     
-    // Update runner in state if already in the list
     setRunners(prevRunners => {
       const updated = prevRunners.map(runner => {
         if (runner._id === data.runnerId || runner.runnerNumber === data.runnerNumber) {
@@ -66,23 +68,20 @@ export default function Runners() {
             ...runner,
             lastKnownLocation: data.location,
             status: data.status || runner.status,
-            lastUpdate: new Date().toISOString() // Add timestamp for last update
+            lastUpdate: new Date().toISOString()
           };
         }
         return runner;
       });
       
-      // If the runner was in our list, return the updated list
       if (updated.some(r => r._id === data.runnerId || r.runnerNumber === data.runnerNumber)) {
         return updated;
       }
       
-      // Otherwise, don't change the list, but trigger a refetch to get new data
       setLocationUpdateCounter(prev => prev + 1);
       return prevRunners;
     });
     
-    // Also update the selected runner if it's the one being updated
     if (selectedRunner && (selectedRunner._id === data.runnerId || selectedRunner.runnerNumber === data.runnerNumber)) {
       setSelectedRunner(prev => ({
         ...prev,
@@ -99,7 +98,6 @@ export default function Runners() {
       const { page, limit } = pagination;
       const { status, category, search } = filters;
       
-      // Build query string following the API documentation
       let query = `?page=${page}&limit=${limit}`;
       if (status) query += `&status=${status}`;
       if (category) query += `&category=${category}`;
@@ -107,10 +105,8 @@ export default function Runners() {
       
       console.log(`Fetching runners with query: ${query}`);
       
-      // Use axios instance to fetch from the API endpoint
       const response = await axios.get(`/runners${query}`);
       
-      // Check if the response is successful
       if (response.data?.success) {
         console.log(`Received ${response.data.data?.length || 0} runners out of ${response.data.count || 0} total`);
         setRunners(response.data.data || []);
@@ -127,7 +123,6 @@ export default function Runners() {
       console.error('Error fetching runners:', err);
       setError(err.response?.data?.error || err.message || 'Failed to fetch runners');
       
-      // Important: Don't use mock data, only show the error
       setRunners([]);
       setPagination({
         ...pagination,
@@ -148,12 +143,11 @@ export default function Runners() {
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters({ ...filters, [name]: value });
-    setPagination({ ...pagination, page: 1 }); // Reset to first page when filter changes
+    setPagination({ ...pagination, page: 1 });
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    // The search will be triggered by the useEffect as filters change
     fetchRunners();
   };
 
@@ -161,21 +155,27 @@ export default function Runners() {
     try {
       setExportLoading(true);
       
-      // Using the specified endpoint for exporting runners
       const response = await axios.get('/runners/export', {
-        responseType: 'blob' // Important to handle file download
+        responseType: 'blob'
       });
       
-      // Create a download link for the CSV file
+      // Create download link
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `runners-export-${new Date().toISOString().split('T')[0]}.csv`);
+      
+      // Generate filename with current date
+      const currentDate = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `victoria-falls-marathon-runners-${currentDate}.csv`);
+      
       document.body.appendChild(link);
       link.click();
       link.remove();
       
-      showSuccess('Runners data exported successfully.');
+      // Clean up the URL
+      window.URL.revokeObjectURL(url);
+      
+      showSuccess('Runners data exported successfully!');
     } catch (err) {
       console.error('Error exporting runners:', err);
       showError('Failed to export runners data. Please try again later.');
@@ -191,11 +191,9 @@ export default function Runners() {
         data.lastKnownLocation = location;
       }
       
-      // Use the API endpoint to update runner status
       const response = await axios.put(`/runners/${runnerId}`, data);
       
       if (response.data?.success) {
-        // Update the runner in the local state
         setRunners(prevRunners => 
           prevRunners.map(runner => 
             runner._id === runnerId ? { ...runner, status, ...(location && { lastKnownLocation: location }) } : runner
@@ -227,188 +225,344 @@ export default function Runners() {
     }
   };
 
-  // Updated to show map popup instead of opening a new window
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'active': return '#6bb944';
+      case 'registered': return '#0067a5';
+      case 'completed': return '#6fb7e3';
+      case 'inactive': return '#ed1c25';
+      default: return '#94a3b8';
+    }
+  };
+
   const viewRunnerDetails = (runner) => {
     setSelectedRunner(runner);
+  };
+
+  const statusCounts = {
+    total: pagination.total,
+    active: runners.filter(r => r.status === 'active').length,
+    registered: runners.filter(r => r.status === 'registered').length,
+    completed: runners.filter(r => r.status === 'completed').length,
+    inactive: runners.filter(r => r.status === 'inactive').length
   };
 
   if (loading && pagination.page === 1) return <Loading />;
   
   return (
     <div className="space-y-6">
-      <div className="sm:flex sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Runners</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage marathon participants</p>
-        </div>
-        <button
-          onClick={exportRunners}
-          disabled={exportLoading}
-          className="mt-3 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {exportLoading ? (
-            <>
-              <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Exporting...
-            </>
-          ) : (
-            <>
-              <ArrowDownTrayIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
-              Export CSV
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <form onSubmit={handleSearch} className="space-y-4 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
-          <div className="sm:flex-1">
-            <label htmlFor="search" className="sr-only">
-              Search
-            </label>
-            <div className="relative rounded-md shadow-sm">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+      {/* Top Header Bar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              <div 
+                className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ backgroundColor: '#0067a5' }}
+              >
+                <UsersIcon className="h-6 w-6 text-white" />
               </div>
-              <input
-                type="text"
-                name="search"
-                id="search"
-                className="block w-full rounded-md border-gray-300 pl-10 focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                placeholder="Search by name, email, or runner number"
-                value={filters.search}
-                onChange={handleFilterChange}
-              />
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Runners Management</h1>
+                <p className="text-sm text-gray-500">Manage marathon participants and track their progress</p>
+              </div>
             </div>
           </div>
-          <div className="w-full sm:w-auto">
-            <label htmlFor="status" className="sr-only">
-              Filter by Status
-            </label>
-            <select
-              id="status"
-              name="status"
-              className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-primary-500 focus:outline-none focus:ring-primary-500 sm:text-sm"
-              value={filters.status}
-              onChange={handleFilterChange}
+          <div className="flex items-center space-x-3">
+            <form onSubmit={handleSearch} className="flex items-center space-x-2">
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search runners..."
+                  value={filters.search}
+                  onChange={handleFilterChange}
+                  name="search"
+                  className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+              <select
+                name="status"
+                value={filters.status}
+                onChange={handleFilterChange}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="">All Status</option>
+                <option value="registered">Registered</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              <select
+                name="category"
+                value={filters.category}
+                onChange={handleFilterChange}
+                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="">All Categories</option>
+                <option value="Half Marathon">Half Marathon</option>
+                <option value="Full Marathon">Full Marathon</option>
+                <option value="Fun Run">Fun Run</option>
+              </select>
+            </form>
+            <button
+              onClick={exportRunners}
+              disabled={exportLoading}
+              className="flex items-center px-4 py-2 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-medium disabled:opacity-50"
+              style={{ backgroundColor: '#6bb944' }}
+              onMouseEnter={(e) => !exportLoading && (e.target.style.backgroundColor = '#5fa83c')}
+              onMouseLeave={(e) => !exportLoading && (e.target.style.backgroundColor = '#6bb944')}
             >
-              <option value="">All Statuses</option>
-              <option value="registered">Registered</option>
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-              <option value="inactive">Inactive</option>
-            </select>
+              {exportLoading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                  Export CSV
+                </>
+              )}
+            </button>
           </div>
-          <div className="w-full sm:w-auto">
-            <label htmlFor="category" className="sr-only">
-              Filter by Category
-            </label>
-            <select
-              id="category"
-              name="category"
-              className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-primary-500 focus:outline-none focus:ring-primary-500 sm:text-sm"
-              value={filters.category}
-              onChange={handleFilterChange}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Total Runners</p>
+              <p className="text-2xl font-bold text-gray-900">{statusCounts.total}</p>
+            </div>
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#0067a5' }}
             >
-              <option value="">All Categories</option>
-              <option value="Half Marathon">Half Marathon</option>
-              <option value="Full Marathon">Full Marathon</option>
-              <option value="Fun Run">Fun Run</option>
-            </select>
+              <UsersIcon className="h-6 w-6 text-white" />
+            </div>
           </div>
-          <button
-            type="submit"
-            className="w-full sm:w-auto inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            <AdjustmentsHorizontalIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
-            Apply Filters
-          </button>
-        </form>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Active</p>
+              <p className="text-2xl font-bold text-gray-900">{statusCounts.active}</p>
+            </div>
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#6bb944' }}
+            >
+              <CheckCircleIcon className="h-6 w-6 text-white" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Registered</p>
+              <p className="text-2xl font-bold text-gray-900">{statusCounts.registered}</p>
+            </div>
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#0067a5' }}
+            >
+              <UserIcon className="h-6 w-6 text-white" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Completed</p>
+              <p className="text-2xl font-bold text-gray-900">{statusCounts.completed}</p>
+            </div>
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#6fb7e3' }}
+            >
+              <ChartBarIcon className="h-6 w-6 text-white" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Inactive</p>
+              <p className="text-2xl font-bold text-gray-900">{statusCounts.inactive}</p>
+            </div>
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#ed1c25' }}
+            >
+              <XCircleIcon className="h-6 w-6 text-white" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Error Display */}
       {error && <Error message={error} onRetry={fetchRunners} />}
 
-      {/* Runners Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Runner
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Categories
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Status
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Location
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Registered
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center">
-                    <Loading />
-                  </td>
+      {/* Runners Grid */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">All Runners</h2>
+            <p className="text-sm text-gray-500">Showing {runners.length} of {pagination.total} runners</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'table' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm0 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loading />
+          </div>
+        ) : runners.length === 0 ? (
+          <div className="text-center py-12">
+            <UsersIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No runners found</h3>
+            <p className="text-gray-500">
+              {filters.search || filters.status || filters.category
+                ? 'No runners match your current filters.'
+                : 'No runners have been registered yet.'}
+            </p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {runners.map((runner) => (
+              <div key={runner._id} className="bg-gray-50 rounded-2xl p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <div 
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-semibold"
+                      style={{ backgroundColor: getStatusColor(runner.status) }}
+                    >
+                      {runner.name?.charAt(0) || 'R'}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-sm">{runner.name}</h3>
+                      <p className="text-xs text-gray-500">#{runner.runnerNumber}</p>
+                    </div>
+                  </div>
+                  <button className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                    <EllipsisHorizontalIcon className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Status</span>
+                    <span className={`px-2 py-1 rounded-full font-medium ${getStatusBadgeClass(runner.status)}`}>
+                      {runner.status?.charAt(0).toUpperCase() + runner.status?.slice(1) || 'Unknown'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Email</span>
+                    <span className="text-gray-900 truncate ml-2">{runner.email}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Categories</span>
+                    <span className="text-gray-900">{runner.registeredCategories?.length || 0}</span>
+                  </div>
+                  {runner.lastKnownLocation && (
+                    <div className="flex items-center text-xs text-gray-500">
+                      <MapPinIcon className="h-3 w-3 mr-1" />
+                      <span>Last location available</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => viewRunnerDetails(runner)}
+                    className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-white rounded-lg transition-colors"
+                    style={{ backgroundColor: '#0067a5' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#005a94'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = '#0067a5'}
+                  >
+                    <EyeIcon className="h-3 w-3 mr-1" />
+                    View
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newStatus = runner.status === 'active' ? 'completed' : 'active';
+                      updateRunnerStatus(runner._id, newStatus);
+                    }}
+                    className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-white rounded-lg transition-colors"
+                    style={{ backgroundColor: runner.status === 'active' ? '#6fb7e3' : '#6bb944' }}
+                  >
+                    {runner.status === 'active' ? 'Complete' : 'Activate'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          // Table View
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-sm">Runner</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-sm">Categories</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-sm">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-sm">Location</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-sm">Registered</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-sm">Actions</th>
                 </tr>
-              ) : runners.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
-                    No runners found matching the current filters
-                  </td>
-                </tr>
-              ) : (
-                runners.map((runner) => (
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {runners.map((runner) => (
                   <tr key={runner._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-3">
+                        <div 
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-semibold text-sm"
+                          style={{ backgroundColor: getStatusColor(runner.status) }}
+                        >
+                          {runner.name?.charAt(0) || 'R'}
+                        </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{runner.name}</div>
-                          <div className="text-sm text-gray-500">{runner.runnerNumber}</div>
-                          <div className="text-sm text-gray-500">{runner.email}</div>
+                          <div className="font-medium text-gray-900 text-sm">{runner.name}</div>
+                          <div className="text-xs text-gray-500">#{runner.runnerNumber}</div>
+                          <div className="text-xs text-gray-500">{runner.email}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
+                    <td className="py-4 px-4">
+                      <div className="flex flex-wrap gap-1">
                         {runner.registeredCategories && runner.registeredCategories.length > 0 ? (
                           runner.registeredCategories.map((category) => (
                             <span
                               key={category}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                             >
                               {category}
                             </span>
@@ -418,192 +572,148 @@ export default function Runners() {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(
-                          runner.status
-                        )}`}
-                      >
+                    <td className="py-4 px-4">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(runner.status)}`}>
                         {runner.status ? runner.status.charAt(0).toUpperCase() + runner.status.slice(1) : 'Unknown'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="py-4 px-4">
                       {runner.lastKnownLocation ? (
                         <div className="flex items-center text-sm text-gray-500">
                           <MapPinIcon className="h-4 w-4 text-gray-400 mr-1" />
-                          <span>
+                          <span className="font-mono text-xs">
                             {runner.lastKnownLocation.coordinates[1].toFixed(4)}, {runner.lastKnownLocation.coordinates[0].toFixed(4)}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-sm text-gray-500">Not available</span>
+                        <span className="text-sm text-gray-400">Not available</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {runner.createdAt ? (
-                        new Date(runner.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })
-                      ) : (
-                        'Unknown'
-                      )}
+                    <td className="py-4 px-4">
+                      <div className="flex items-center text-sm text-gray-500">
+                        <CalendarIcon className="h-4 w-4 mr-1" />
+                        {runner.createdAt ? (
+                          new Date(runner.createdAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })
+                        ) : (
+                          'Unknown'
+                        )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        className="text-primary-600 hover:text-primary-900 mr-3"
-                        onClick={() => viewRunnerDetails(runner)}
-                      >
-                        View
-                      </button>
-                      <button
-                        className="text-primary-600 hover:text-primary-900"
-                        onClick={() => {
-                          const newStatus = runner.status === 'active' ? 'completed' : 'active';
-                          updateRunnerStatus(runner._id, newStatus);
-                        }}
-                      >
-                        {runner.status === 'active' ? 'Complete' : 'Activate'}
-                      </button>
+                    <td className="py-4 px-4">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => viewRunnerDetails(runner)}
+                          className="flex items-center px-2 py-1 text-xs font-medium text-white rounded-lg transition-colors"
+                          style={{ backgroundColor: '#0067a5' }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#005a94'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = '#0067a5'}
+                        >
+                          <EyeIcon className="h-3 w-3 mr-1" />
+                          View
+                        </button>
+                        <button
+                          onClick={() => {
+                            const newStatus = runner.status === 'active' ? 'completed' : 'active';
+                            updateRunnerStatus(runner._id, newStatus);
+                          }}
+                          className="flex items-center px-2 py-1 text-xs font-medium text-white rounded-lg transition-colors"
+                          style={{ backgroundColor: runner.status === 'active' ? '#6fb7e3' : '#6bb944' }}
+                        >
+                          {runner.status === 'active' ? 'Complete' : 'Activate'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{(pagination.page - 1) * pagination.limit + 1}</span> to{' '}
-                  <span className="font-medium">
-                    {Math.min(pagination.page * pagination.limit, pagination.total)}
-                  </span>{' '}
-                  of <span className="font-medium">{pagination.total}</span> results
-                </p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
-                    onClick={() => handlePageChange(pagination.page - 1)}
-                    disabled={pagination.page === 1}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
-                      pagination.page === 1
-                        ? 'text-gray-300 cursor-not-allowed'
-                        : 'text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="sr-only">Previous</span>
-                    <svg
-                      className="h-5 w-5"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                  
-                  {/* Page numbers */}
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (pagination.totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (pagination.page <= 3) {
-                      pageNum = i + 1;
-                    } else if (pagination.page >= pagination.totalPages - 2) {
-                      pageNum = pagination.totalPages - 4 + i;
-                    } else {
-                      pageNum = pagination.page - 2 + i;
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handlePageChange(pageNum)}
-                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                          pagination.page === pageNum
-                            ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                  
-                  <button
-                    onClick={() => handlePageChange(pagination.page + 1)}
-                    disabled={pagination.page === pagination.totalPages}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
-                      pagination.page === pagination.totalPages
-                        ? 'text-gray-300 cursor-not-allowed'
-                        : 'text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="sr-only">Next</span>
-                    <svg
-                      className="h-5 w-5"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                </nav>
-              </div>
+          <div className="mt-6 flex items-center justify-between">
+            <div className="flex items-center text-sm text-gray-500">
+              <span>
+                Showing <span className="font-medium text-gray-900">{(pagination.page - 1) * pagination.limit + 1}</span> to{' '}
+                <span className="font-medium text-gray-900">
+                  {Math.min(pagination.page * pagination.limit, pagination.total)}
+                </span>{' '}
+                of <span className="font-medium text-gray-900">{pagination.total}</span> results
+              </span>
             </div>
             
-            {/* Mobile pagination */}
-            <div className="flex items-center justify-between sm:hidden">
+            <div className="flex items-center space-x-2">
               <button
                 onClick={() => handlePageChange(pagination.page - 1)}
                 disabled={pagination.page === 1}
-                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                className={`flex items-center px-3 py-2 text-sm font-medium rounded-xl transition-colors ${
                   pagination.page === 1
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-gray-700 bg-white hover:bg-gray-50'
+                    ? 'text-gray-300 cursor-not-allowed bg-gray-50'
+                    : 'text-gray-700 bg-white border border-gray-200 hover:bg-gray-50'
                 }`}
               >
+                <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                </svg>
                 Previous
               </button>
-              <div className="text-sm text-gray-700">
-                <span className="font-medium">{pagination.page}</span> of{' '}
-                <span className="font-medium">{pagination.totalPages}</span>
+              
+              {/* Page numbers */}
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.page <= 3) {
+                    pageNum = i + 1;
+                  } else if (pagination.page >= pagination.totalPages - 2) {
+                    pageNum = pagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = pagination.page - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`w-10 h-10 text-sm font-medium rounded-xl transition-colors ${
+                        pagination.page === pageNum
+                          ? 'text-white'
+                          : 'text-gray-700 hover:bg-gray-50 border border-gray-200'
+                      }`}
+                      style={pagination.page === pageNum ? { backgroundColor: '#0067a5' } : {}}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
               </div>
+              
               <button
                 onClick={() => handlePageChange(pagination.page + 1)}
                 disabled={pagination.page === pagination.totalPages}
-                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                className={`flex items-center px-3 py-2 text-sm font-medium rounded-xl transition-colors ${
                   pagination.page === pagination.totalPages
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-gray-700 bg-white hover:bg-gray-50'
+                    ? 'text-gray-300 cursor-not-allowed bg-gray-50'
+                    : 'text-gray-700 bg-white border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 Next
+                <svg className="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Map Popup */}
+      {/* Runner Details Popup */}
       {selectedRunner && (
         <RunnerMapPopup 
           runner={selectedRunner} 
