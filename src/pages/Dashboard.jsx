@@ -1,4 +1,4 @@
-// src/pages/Dashboard.jsx
+// src/pages/Dashboard.jsx - Updated to match the design look and feel
 import { useState, useEffect } from 'react';
 import axios from '../utils/axios';
 import { 
@@ -8,7 +8,11 @@ import {
   ShieldCheckIcon,
   BellIcon,
   CheckCircleIcon,
-  ClockIcon
+  ClockIcon,
+  ChartBarIcon,
+  DocumentTextIcon,
+  MagnifyingGlassIcon,
+  EllipsisHorizontalIcon
 } from '@heroicons/react/24/outline';
 import { 
   LineChart, 
@@ -22,7 +26,10 @@ import {
   Area, 
   BarChart, 
   Bar,
-  Legend
+  Legend,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 import Loading from '../components/Loading';
 import Error from '../components/Error';
@@ -45,26 +52,22 @@ export default function Dashboard() {
     try {
       setLoading(true);
 
-      // Fetch admin users - as listed in the API documentation
+      // Fetch admin users
       const adminsResponse = await axios.get('/auth/admins');
       if (adminsResponse.data?.success) {
         setAdminUsers(adminsResponse.data.data || []);
-      } else {
-        throw new Error('Failed to fetch admin users');
       }
 
-      // Fetch runners with pagination - as listed in the API documentation
+      // Fetch runners
       const runnersResponse = await axios.get('/runners?limit=10');
       if (runnersResponse.data?.success) {
         setRunnerStats({
           count: runnersResponse.data.count || 0,
           runners: runnersResponse.data.data || []
         });
-      } else {
-        throw new Error('Failed to fetch runners');
       }
 
-      // Fetch routes - as listed in the API documentation
+      // Fetch routes
       const routesResponse = await axios.get('/routes');
       if (routesResponse.data?.success) {
         const routesData = routesResponse.data.data || [];
@@ -72,25 +75,17 @@ export default function Dashboard() {
           count: routesResponse.data.count || 0,
           routes: routesData
         });
-        
-        // Process route data for chart
         processRouteData(routesData);
-      } else {
-        throw new Error('Failed to fetch routes');
       }
 
-      // Fetch races - as listed in the API documentation
+      // Fetch races
       const racesResponse = await axios.get('/races?limit=10');
       if (racesResponse.data?.success) {
         setRaces({
           count: racesResponse.data.count || 0,
           races: racesResponse.data.data || []
         });
-        
-        // Generate chart data from races
         generateChartData(racesResponse.data.data || []);
-      } else {
-        throw new Error('Failed to fetch races');
       }
 
       setError(null);
@@ -103,7 +98,6 @@ export default function Dashboard() {
   };
 
   const processRouteData = (routesData) => {
-    // Group routes by category and count them
     const categoryCounts = {};
     
     routesData.forEach(route => {
@@ -120,19 +114,16 @@ export default function Dashboard() {
       categoryCounts[category].totalDistance += (route.distance || 0);
     });
     
-    // Calculate average distances
     Object.keys(categoryCounts).forEach(category => {
       categoryCounts[category].avgDistance = 
         categoryCounts[category].totalDistance / categoryCounts[category].count;
     });
     
-    // Convert to array for chart
     const routeChartData = Object.values(categoryCounts);
     setRouteData(routeChartData);
   };
 
   const generateChartData = (racesData) => {
-    // Group races by date
     const racesByDate = {};
     
     racesData.forEach(race => {
@@ -153,7 +144,6 @@ export default function Dashboard() {
       }
     });
     
-    // Convert to array and sort by date
     const chartData = Object.values(racesByDate);
     chartData.sort((a, b) => {
       const [aMonth, aDay] = a.date.split('/').map(Number);
@@ -164,282 +154,379 @@ export default function Dashboard() {
     setChartData(chartData);
   };
 
-  // Count active and completed races
   const activeRaces = races.races ? races.races.filter(race => race.status === 'in-progress').length : 0;
   const completedRaces = races.races ? races.races.filter(race => race.status === 'completed').length : 0;
 
-  if (loading) return <Loading />;
-  if (error) return <Error message={error} />;
-
-  // Format numbers with commas
   const formatNumber = (num) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
 
-  // Format time for display
-  const formatTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+  const COLORS = ['#0067a5', '#6bb944', '#6fb7e3', '#ed1c25'];
+
+  const pieData = [
+    { name: 'Active Runners', value: runnerStats.runners.filter(r => r.status === 'active').length, color: '#6bb944' },
+    { name: 'Registered', value: runnerStats.runners.filter(r => r.status === 'registered').length, color: '#0067a5' },
+    { name: 'Completed', value: runnerStats.runners.filter(r => r.status === 'completed').length, color: '#6fb7e3' },
+    { name: 'Inactive', value: runnerStats.runners.filter(r => r.status === 'inactive').length, color: '#ed1c25' }
+  ];
+
+  if (loading) return <Loading />;
+  if (error) return <Error message={error} />;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">Overview of Victoria Falls Marathon metrics</p>
+      {/* Top Header Bar - matching the design */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              <div 
+                className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ backgroundColor: '#0067a5' }}
+              >
+                <ChartBarIcon className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Dashboard Overview</h1>
+                <p className="text-sm text-gray-500">Victoria Falls Marathon Management</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search..."
+                className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+            <button className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-50">
+              <BellIcon className="h-5 w-5" />
+            </button>
+            <button className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-50">
+              <EllipsisHorizontalIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Main Stats */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Cards Grid - matching the design layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Total Runners Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between mb-4">
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#6bb944' }}
+            >
+              <UsersIcon className="h-6 w-6 text-white" />
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-gray-900">{formatNumber(runnerStats.count)}</div>
+              <div className="text-sm text-gray-500">Total Runners</div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm">
+              <div 
+                className="w-2 h-2 rounded-full mr-2"
+                style={{ backgroundColor: '#6bb944' }}
+              ></div>
+              <span className="text-gray-600">+12% this month</span>
+            </div>
+            <div 
+              className="px-2 py-1 rounded-full text-xs font-medium text-white"
+              style={{ backgroundColor: '#6bb944' }}
+            >
+              Active
+            </div>
+          </div>
+        </div>
+
+        {/* Active Routes Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between mb-4">
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#0067a5' }}
+            >
+              <MapIcon className="h-6 w-6 text-white" />
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-gray-900">{routes.count}</div>
+              <div className="text-sm text-gray-500">Active Routes</div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm">
+              <div 
+                className="w-2 h-2 rounded-full mr-2"
+                style={{ backgroundColor: '#0067a5' }}
+              ></div>
+              <span className="text-gray-600">{routes.routes.filter(r => r.isActive).length} routes active</span>
+            </div>
+            <div 
+              className="px-2 py-1 rounded-full text-xs font-medium text-white"
+              style={{ backgroundColor: '#0067a5' }}
+            >
+              Ready
+            </div>
+          </div>
+        </div>
+
+        {/* Ongoing Races Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between mb-4">
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#6fb7e3' }}
+            >
+              <FlagIcon className="h-6 w-6 text-white" />
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-gray-900">{activeRaces}</div>
+              <div className="text-sm text-gray-500">Ongoing Races</div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm">
+              <div 
+                className="w-2 h-2 rounded-full mr-2"
+                style={{ backgroundColor: '#6fb7e3' }}
+              ></div>
+              <span className="text-gray-600">{completedRaces} completed</span>
+            </div>
+            <div 
+              className="px-2 py-1 rounded-full text-xs font-medium text-white"
+              style={{ backgroundColor: '#6fb7e3' }}
+            >
+              Live
+            </div>
+          </div>
+        </div>
+
         {/* Admin Users Card */}
-        <div className="bg-gradient-to-br from-purple-500 to-indigo-400 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium opacity-80">Admin Users</p>
-                <p className="text-3xl font-bold mt-1">{formatNumber(adminUsers.length)}</p>
-              </div>
-              <div className="p-3 rounded-full bg-white/20">
-                <ShieldCheckIcon className="h-6 w-6 text-white" />
-              </div>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between mb-4">
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#ed1c25' }}
+            >
+              <ShieldCheckIcon className="h-6 w-6 text-white" />
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-gray-900">{adminUsers.length}</div>
+              <div className="text-sm text-gray-500">Admin Users</div>
             </div>
           </div>
-        </div>
-
-        {/* Runners Card */}
-        <div className="bg-gradient-to-br from-orange-400 to-pink-300 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium opacity-80">Total Runners</p>
-                <p className="text-3xl font-bold mt-1">{formatNumber(runnerStats.count)}</p>
-              </div>
-              <div className="p-3 rounded-full bg-white/20">
-                <UsersIcon className="h-6 w-6 text-white" />
-              </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm">
+              <div 
+                className="w-2 h-2 rounded-full mr-2"
+                style={{ backgroundColor: '#ed1c25' }}
+              ></div>
+              <span className="text-gray-600">All active</span>
             </div>
-          </div>
-        </div>
-
-        {/* Routes Card */}
-        <div className="bg-gradient-to-br from-pink-500 to-rose-400 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium opacity-80">Total Routes</p>
-                <p className="text-3xl font-bold mt-1">{formatNumber(routes.count)}</p>
-              </div>
-              <div className="p-3 rounded-full bg-white/20">
-                <MapIcon className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Races Card */}
-        <div className="bg-gradient-to-br from-cyan-500 to-blue-400 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium opacity-80">Total Races</p>
-                <p className="text-3xl font-bold mt-1">{formatNumber(races.count)}</p>
-                <p className="text-xs mt-1">{activeRaces} active races</p>
-              </div>
-              <div className="p-3 rounded-full bg-white/20">
-                <FlagIcon className="h-6 w-6 text-white" />
-              </div>
+            <div 
+              className="px-2 py-1 rounded-full text-xs font-medium text-white"
+              style={{ backgroundColor: '#ed1c25' }}
+            >
+              Secure
             </div>
           </div>
         </div>
       </div>
 
-      {/* Charts & Lists */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Race Participation Chart */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Race Participation Trends</h2>
-          </div>
-          <div className="h-80">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={chartData}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
-                >
-                  <defs>
-                    <linearGradient id="colorParticipants" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#8884d8" stopOpacity={0.1}/>
-                    </linearGradient>
-                    <linearGradient id="colorCompletions" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#82ca9d" stopOpacity={0.1}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => [value, name === 'participants' ? 'Participants' : 'Completions']}
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                      padding: '8px 12px'
-                    }}
-                  />
-                  <Legend />
-                  <Area 
-                    type="monotone" 
-                    dataKey="participants" 
-                    name="Participants"
-                    stroke="#8884d8" 
-                    strokeWidth={2}
-                    fill="url(#colorParticipants)" 
-                    activeDot={{ r: 8 }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="completions" 
-                    name="Completions"
-                    stroke="#82ca9d" 
-                    strokeWidth={2}
-                    fill="url(#colorCompletions)" 
-                    activeDot={{ r: 8 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">No race data available for chart</p>
+      {/* Main Content Grid - Two Column Layout like the design */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Charts */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Race Participation Chart */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Race Analytics</h3>
+                <p className="text-sm text-gray-500">Participation trends over time</p>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Route Categories Chart */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Route Categories</h2>
-          </div>
-          <div className="h-80">
-            {routeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={routeData}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => [
-                      name === 'avgDistance' ? `${value.toFixed(1)} km` : value,
-                      name === 'avgDistance' ? 'Avg Distance' : 'Count'
-                    ]}
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                      padding: '8px 12px'
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="count" fill="#8884d8" name="Routes" />
-                  <Bar dataKey="avgDistance" fill="#82ca9d" name="Avg Distance (km)" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">No route data available for chart</p>
+              <div className="flex items-center space-x-2">
+                <button className="px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 text-gray-600">Week</button>
+                <button className="px-3 py-1 text-xs font-medium rounded-lg text-gray-500">Month</button>
+                <button className="px-3 py-1 text-xs font-medium rounded-lg text-gray-500">Year</button>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Races */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center">
-            <FlagIcon className="h-5 w-5 text-gray-500 mr-2" />
-            <h2 className="text-lg font-medium text-gray-900">Recent Races</h2>
-          </div>
-        </div>
-        <div className="divide-y divide-gray-200">
-          {races.races && races.races.length > 0 ? (
-            races.races.slice(0, 5).map((race) => (
-              <div key={race._id} className="px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center">
-                      <p className="text-sm font-medium text-gray-900">
-                        {race.runner?.name || 'Unknown Runner'}
-                      </p>
-                      <p className="ml-2 text-sm text-gray-500">
-                        ({race.runner?.runnerNumber || 'No Number'})
-                      </p>
-                    </div>
-                    <p className="text-sm text-gray-700">
-                      {race.route?.name} - {race.category}
-                    </p>
-                    {race.completionTime && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Completion Time: {formatTime(race.completionTime)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      race.status === 'completed' 
-                        ? 'bg-green-100 text-green-800' 
-                        : race.status === 'in-progress'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {race.status === 'completed' ? 'Completed' : 
-                       race.status === 'in-progress' ? 'In Progress' : 
-                       race.status}
-                    </span>
-                    <span className="text-xs text-gray-500 mt-1">
-                      {new Date(race.startTime || race.createdAt).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </span>
+            </div>
+            <div className="h-80">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorParticipants" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0067a5" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#0067a5" stopOpacity={0.1}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: 'none',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="participants" 
+                      stroke="#0067a5" 
+                      strokeWidth={3}
+                      fill="url(#colorParticipants)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <ChartBarIcon className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p>No data available</p>
                   </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <div className="px-6 py-4 text-center text-gray-500">
-              No recent races found
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Recent Activity - Timeline style like the design */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+                <p className="text-sm text-gray-500">Latest race updates and registrations</p>
+              </div>
+              <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">View All</button>
+            </div>
+            <div className="space-y-4">
+              {races.races && races.races.slice(0, 4).map((race, index) => (
+                <div key={race._id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl">
+                  <div className="relative">
+                    <div 
+                      className="w-3 h-3 rounded-full"
+                      style={{ 
+                        backgroundColor: index === 0 ? '#6bb944' : 
+                                       index === 1 ? '#0067a5' : 
+                                       index === 2 ? '#6fb7e3' : '#ed1c25'
+                      }}
+                    ></div>
+                    {index < races.races.length - 1 && (
+                      <div className="absolute top-3 left-1.5 w-0.5 h-8 bg-gray-200"></div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {race.runner?.name || 'Unknown Runner'} - {race.category}
+                      </p>
+                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        race.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                        race.status === 'in-progress' ? 'bg-blue-100 text-blue-800' : 
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {race.status || 'Unknown'}
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {race.route?.name} • {new Date(race.startTime || race.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column - Like the design's right panel */}
+        <div className="space-y-6">
+          {/* Runner Distribution */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Runner Status</h3>
+                <p className="text-sm text-gray-500">Distribution overview</p>
+              </div>
+            </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2 mt-4">
+              {pieData.map((item, index) => (
+                <div key={index} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center">
+                    <div 
+                      className="w-3 h-3 rounded-full mr-3"
+                      style={{ backgroundColor: item.color }}
+                    ></div>
+                    <span className="text-gray-600">{item.name}</span>
+                  </div>
+                  <span className="font-semibold text-gray-900">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick Actions - Like premium subscription in design */}
+          <div 
+            className="rounded-2xl p-6 text-white relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #0067a5 0%, #6fb7e3 100%)'
+            }}
+          >
+            <div className="relative z-10">
+              <h3 className="text-lg font-semibold mb-2">Marathon Control</h3>
+              <p className="text-sm text-white/80 mb-4">
+                Manage your marathon operations efficiently with real-time monitoring and control.
+              </p>
+              <ul className="space-y-2 text-sm mb-6">
+                <li className="flex items-center">
+                  <CheckCircleIcon className="h-4 w-4 mr-2" />
+                  Real-time race tracking
+                </li>
+                <li className="flex items-center">
+                  <CheckCircleIcon className="h-4 w-4 mr-2" />
+                  Automated communications
+                </li>
+                <li className="flex items-center">
+                  <CheckCircleIcon className="h-4 w-4 mr-2" />
+                  Advanced analytics
+                </li>
+                <li className="flex items-center">
+                  <CheckCircleIcon className="h-4 w-4 mr-2" />
+                  Emergency protocols
+                </li>
+              </ul>
+              {/* <button className="w-full bg-white text-gray-900 font-medium py-2 px-4 rounded-xl hover:bg-gray-50 transition-colors">
+                Access Controls
+              </button> */}
+            </div>
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-white/10"></div>
+            <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/5"></div>
+          </div>
         </div>
       </div>
     </div>
